@@ -1,0 +1,460 @@
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    Character = char
+end)
+
+-- GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "PlayerTools"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Botão Seguir Cabeça
+local FollowButton = Instance.new("TextButton")
+FollowButton.Size = UDim2.new(0, 180, 0, 50)
+FollowButton.Position = UDim2.new(0, 20, 0, 20)
+FollowButton.Text = "AIMBOT: OFF"
+FollowButton.BackgroundColor3 = Color3.fromRGB(40,40,40)
+FollowButton.TextColor3 = Color3.new(1,1,1)
+FollowButton.Parent = ScreenGui
+
+-- Botão Contorno
+local ESPButton = Instance.new("TextButton")
+ESPButton.Size = UDim2.new(0, 180, 0, 50)
+ESPButton.Position = UDim2.new(0, 20, 0, 80)
+ESPButton.Text = "ESP: OFF"
+ESPButton.BackgroundColor3 = Color3.fromRGB(40,40,40)
+ESPButton.TextColor3 = Color3.new(1,1,1)
+ESPButton.Parent = ScreenGui
+
+local CloseButton = Instance.new("TextButton")
+CloseButton.Size = UDim2.new(0, 180, 0, 50)
+CloseButton.Position = UDim2.new(0, 20, 0, 140)
+CloseButton.Text = "FECHAR"
+CloseButton.BackgroundColor3 = Color3.fromRGB(180,50,50)
+CloseButton.TextColor3 = Color3.new(1,1,1)
+CloseButton.Parent = ScreenGui
+
+local LegitButton = Instance.new("TextButton")
+LegitButton.Size = UDim2.new(0,180,0,50)
+LegitButton.Position = UDim2.new(0,20,0,200)
+LegitButton.Text = "LEGIT: OFF"
+LegitButton.BackgroundColor3 = Color3.fromRGB(40,40,40)
+LegitButton.TextColor3 = Color3.new(1,1,1)
+LegitButton.Parent = ScreenGui
+
+-- FOV -
+local FOVMinus = Instance.new("TextButton")
+FOVMinus.Size = UDim2.new(0,85,0,40)
+FOVMinus.Position = UDim2.new(0,20,0,260)
+FOVMinus.Text = "FOV -"
+FOVMinus.BackgroundColor3 = Color3.fromRGB(40,40,40)
+FOVMinus.TextColor3 = Color3.new(1,1,1)
+FOVMinus.Parent = ScreenGui
+
+-- FOV +
+local FOVPlus = Instance.new("TextButton")
+FOVPlus.Size = UDim2.new(0,85,0,40)
+FOVPlus.Position = UDim2.new(0,115,0,260)
+FOVPlus.Text = "FOV +"
+FOVPlus.BackgroundColor3 = Color3.fromRGB(40,40,40)
+FOVPlus.TextColor3 = Color3.new(1,1,1)
+FOVPlus.Parent = ScreenGui
+
+local FOVButton = Instance.new("TextButton")
+FOVButton.Size = UDim2.new(0,180,0,50)
+FOVButton.Position = UDim2.new(0,20,0,200)
+FOVButton.Text = "FOV: OFF"
+FOVButton.BackgroundColor3 = Color3.fromRGB(40,40,40)
+FOVButton.TextColor3 = Color3.new(1,1,1)
+FOVButton.Parent = ScreenGui
+
+local fovEnabled = false
+local fovRadius = 120
+
+local FOVCircle = Instance.new("Frame")
+FOVCircle.Name = "FOVCircle"
+FOVCircle.AnchorPoint = Vector2.new(0.5,0.5)
+FOVCircle.Position = UDim2.new(0.5,0,0.5,0)
+FOVCircle.Size = UDim2.new(0,fovRadius*2,0,fovRadius*2)
+FOVCircle.BackgroundTransparency = 1
+FOVCircle.Visible = false
+FOVCircle.Parent = ScreenGui
+
+local CircleStroke = Instance.new("UIStroke")
+CircleStroke.Thickness = 2
+CircleStroke.Parent = FOVCircle
+
+local CircleCorner = Instance.new("UICorner")
+CircleCorner.CornerRadius = UDim.new(1,0)
+CircleCorner.Parent = FOVCircle
+
+if espConnection then
+    espConnection:Disconnect()
+    espConnection = nil
+end
+
+-- Jogador mais próximo
+local function getClosestPlayer()
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            local distance = (Character.Head.Position - player.Character.Head.Position).Magnitude
+            if distance < shortestDistance then
+                shortestDistance = distance
+                closestPlayer = player
+            end
+        end
+    end
+
+    return closestPlayer
+end
+
+-- Atualizar ESP
+local espConnection
+
+-- Atualizar ESP estável
+local function updateESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local highlight = player.Character:FindFirstChild("ESPHighlight")
+
+            if espEnabled then
+                if not highlight then
+                    highlight = Instance.new("Highlight")
+                    highlight.Name = "ESPHighlight"
+                    highlight.FillTransparency = 0.5
+                    highlight.OutlineTransparency = 0
+                    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    highlight.Parent = player.Character
+                end
+            else
+                if highlight then
+                    highlight:Destroy()
+                end
+            end
+        end
+    end
+end
+
+local Camera = workspace.CurrentCamera
+
+-- Seguir mira/câmera
+FollowButton.MouseButton1Click:Connect(function()
+    followEnabled = not followEnabled
+
+    if followEnabled then
+        FollowButton.Text = "Aim Head: ON"
+
+        followConnection = RunService.RenderStepped:Connect(function()
+            local target = getClosestPlayer()
+
+            if target
+                and target.Character
+                and target.Character:FindFirstChild("Head") then
+
+                local head = target.Character.Head
+
+                -- Faz a câmera mirar na cabeça
+                Camera.CFrame = CFrame.new(
+                    Camera.CFrame.Position,
+                    head.Position
+                )
+            end
+        end)
+
+    else
+        FollowButton.Text = "Aim Head: OFF"
+
+        if followConnection then
+            followConnection:Disconnect()
+            followConnection = nil
+        end
+    end
+end)
+
+-- Contorno
+ESPButton.MouseButton1Click:Connect(function()
+    espEnabled = not espEnabled
+
+    if espEnabled then
+        ESPButton.Text = "Contorno: ON"
+
+        -- evita múltiplas conexões
+        if espConnection then
+            espConnection:Disconnect()
+        end
+
+        -- mantém o ESP sempre atualizado
+        espConnection = RunService.RenderStepped:Connect(function()
+            updateESP()
+        end)
+
+    else
+        ESPButton.Text = "Contorno: OFF"
+
+        if espConnection then
+            espConnection:Disconnect()
+            espConnection = nil
+        end
+
+        updateESP() -- remove highlights
+    end
+end)
+
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function()
+        task.wait(1)
+        updateESP()
+    end)
+end)
+
+
+CloseButton.MouseButton1Click:Connect(function()
+
+    -- Desativar Aim
+    followEnabled = false
+    if followConnection then
+        followConnection:Disconnect()
+        followConnection = nil
+    end
+
+    -- Desativar ESP
+    espEnabled = false
+    if espConnection then
+        espConnection:Disconnect()
+        espConnection = nil
+    end
+    updateESP()
+
+    -- Desativar FOV
+    fovEnabled = false
+    if FOVCircle then
+        FOVCircle.Visible = false
+    end
+
+    -- Fechar GUI
+    fovEnabled = false
+
+if FOVCircle then
+    FOVCircle.Visible = false
+end
+    legitEnabled = false
+
+if legitConnection then
+    legitConnection:Disconnect()
+    legitConnection = nil
+end
+    ScreenGui:Destroy()
+end)
+
+local legitEnabled = false
+local legitConnection
+
+local legitSmoothness = 0.06 -- força suave
+local legitFOV = 100 -- usa o círculo FOV
+
+local fovRadius = 100
+local minFOV = 50
+local maxFOV = 300
+
+local Camera = workspace.CurrentCamera
+
+local function getClosestInFOV()
+    local closest = nil
+    local shortest = fovRadius
+
+    local center = Vector2.new(
+        Camera.ViewportSize.X/2,
+        Camera.ViewportSize.Y/2
+    )
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer
+        and player.Character
+        and player.Character:FindFirstChild("Head") then
+
+            local head = player.Character.Head
+            local pos, visible = Camera:WorldToViewportPoint(head.Position)
+
+            if visible then
+                local dist = (
+                    Vector2.new(pos.X,pos.Y) - center
+                ).Magnitude
+
+                if dist < shortest then
+                    shortest = dist
+                    closest = player
+                end
+            end
+        end
+    end
+
+    return closest
+end
+
+local function startLegitAim()
+    if legitConnection then
+        legitConnection:Disconnect()
+    end
+
+    legitConnection = RunService.RenderStepped:Connect(function()
+        if not legitEnabled then return end
+
+        local target = getClosestInFOV()
+
+        if target
+        and target.Character
+        and target.Character:FindFirstChild("Head") then
+
+            local headPos = target.Character.Head.Position
+
+            local targetCF = CFrame.new(
+                Camera.CFrame.Position,
+                headPos
+            )
+
+            Camera.CFrame = Camera.CFrame:Lerp(
+                targetCF,
+                legitSmoothness
+            )
+        end
+    end)
+end
+
+LegitButton.MouseButton1Click:Connect(function()
+    legitEnabled = not legitEnabled
+
+    if legitEnabled then
+        LegitButton.Text = "Legit: ON"
+        startLegitAim()
+    else
+        LegitButton.Text = "Legit: OFF"
+
+        if legitConnection then
+            legitConnection:Disconnect()
+            legitConnection = nil
+        end
+    end
+end)
+
+local FOVCircle = Instance.new("Frame")
+FOVCircle.Name = "FOVCircle"
+FOVCircle.BackgroundTransparency = 1
+FOVCircle.Visible = false
+FOVCircle.AnchorPoint = Vector2.new(0.5,0.5)
+FOVCircle.Position = UDim2.new(0.5,0,0.5,0)
+FOVCircle.Parent = ScreenGui
+
+local CircleStroke = Instance.new("UIStroke")
+CircleStroke.Thickness = 2
+CircleStroke.Parent = FOVCircle
+
+local CircleCorner = Instance.new("UICorner")
+CircleCorner.CornerRadius = UDim.new(1,0)
+CircleCorner.Parent = FOVCircle
+
+local function updateFOVCircle()
+    FOVCircle.Size = UDim2.new(
+        0,
+        fovRadius * 2,
+        0,
+        fovRadius * 2
+    )
+end
+
+updateFOVCircle()
+
+FOVMinus.MouseButton1Click:Connect(function()
+    fovRadius = math.max(minFOV, fovRadius - 20)
+    updateFOVCircle()
+end)
+
+FOVPlus.MouseButton1Click:Connect(function()
+    fovRadius = math.min(maxFOV, fovRadius + 20)
+    updateFOVCircle()
+end)
+
+local TeleportService = game:GetService("TeleportService")
+
+TeleportService.LocalPlayerArrivedFromTeleport:Connect(function()
+    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+    if not PlayerGui:FindFirstChild("PlayerTools") then
+        ScreenGui.Parent = PlayerGui
+    end
+end)
+
+-- Variáveis
+local fovEnabled = false
+local fovRadius = 120
+
+-- Botão FOV
+local FOVButton = Instance.new("TextButton")
+FOVButton.Name = "FOVButton"
+FOVButton.Size = UDim2.new(0,180,0,50)
+FOVButton.Position = UDim2.new(0,20,0,200)
+FOVButton.Text = "FOV: OFF"
+FOVButton.BackgroundColor3 = Color3.fromRGB(40,40,40)
+FOVButton.TextColor3 = Color3.new(1,1,1)
+FOVButton.Parent = ScreenGui
+
+-- Círculo FOV
+local FOVCircle = Instance.new("Frame")
+FOVCircle.Name = "FOVCircle"
+FOVCircle.AnchorPoint = Vector2.new(0.5,0.5)
+FOVCircle.Position = UDim2.new(0.5,0,0.5,0)
+FOVCircle.Size = UDim2.new(0,fovRadius*2,0,fovRadius*2)
+FOVCircle.BackgroundTransparency = 1
+FOVCircle.Visible = false
+FOVCircle.Parent = ScreenGui
+
+local CircleStroke = Instance.new("UIStroke")
+CircleStroke.Thickness = 2
+CircleStroke.Parent = FOVCircle
+
+local CircleCorner = Instance.new("UICorner")
+CircleCorner.CornerRadius = UDim.new(1,0)
+CircleCorner.Parent = FOVCircle
+
+-- Função do botão
+FOVButton.MouseButton1Click:Connect(function()
+    fovEnabled = not fovEnabled
+
+    FOVCircle.Visible = fovEnabled
+    FOVButton.Text = fovEnabled and "FOV: ON" or "FOV: OFF"
+end)
+
+local fovRadius = 120
+local minFOV = 50
+local maxFOV = 300
+
+local function updateFOVCircle()
+    FOVCircle.Size = UDim2.new(
+        0,
+        fovRadius * 2,
+        0,
+        fovRadius * 2
+    )
+end
+
+updateFOVCircle()
+
+FOVMinus.MouseButton1Click:Connect(function()
+    fovRadius = math.max(minFOV, fovRadius - 20)
+    updateFOVCircle()
+end)
+
+FOVPlus.MouseButton1Click:Connect(function()
+    fovRadius = math.min(maxFOV, fovRadius + 20)
+    updateFOVCircle()
+end)
+
